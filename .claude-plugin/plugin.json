@@ -1,7 +1,7 @@
 {
   "name": "team-builder",
   "description": "Analyzes any idea or project and intelligently builds a Claude Code agent team with optimized roles, prompts, and task dependencies",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "author": {
     "name": "Wesley Israel",
     "url": "https://github.com/wesleyisr4"

@@ -1,8 +1,8 @@
 # Team Builder - Claude Code Plugin
 
-Analyzes any idea or project and intelligently builds a Claude Code agent team with optimized roles, prompts, and task dependencies.
+Analyzes any idea or project and intelligently builds a Claude Code agent team with optimized roles, prompts, and task dependencies — then **actually executes it**.
 
-**v2.0** - Now actually spawns structured agent teams using `TeamCreate`, `TaskCreate`, and `Task` tools with full dependency management and coordination.
+**v3.0** - The agent becomes the **team leader**: spawns real teammates, waits for each wave to finish, coordinates inter-agent communication, and delivers the final result.
 
 ## Requirements
 
@@ -33,18 +33,60 @@ Install the plugin:
 /team-builder a React Native finance app with charts and goals
 ```
 
-## What It Does
+## How It Works
 
 1. **Understands your idea** - asks 2-3 clarifying questions only if needed
 2. **Analyzes context** - reads your codebase, detects stack, identifies patterns
-3. **Builds the team plan** - creates optimized agent roles with clear prompts and deliverables
-4. **Shows a visual plan** - dependency diagram before executing
-5. **Asks for confirmation** - you approve or adjust before the team is created
-6. **Creates the team** - uses `TeamCreate` to set up structured team
-7. **Creates tasks** - uses `TaskCreate` with dependencies (`blockedBy`) for each agent
-8. **Spawns teammates** - uses `Task` to launch real agents with auto-contained prompts
-9. **Coordinates** - manages task assignment, unblocking, and inter-agent messaging
-10. **Cleans up** - shuts down teammates and removes team resources when done
+3. **Builds the team plan** - roles, prompts, deliverables, dependency graph
+4. **Shows visual plan** - dependency diagram + role table for your approval
+5. **You approve** - adjust or confirm before execution
+
+Then it **executes for real**:
+
+6. `TeamCreate` - creates structured team with shared task list
+7. `TaskCreate` - creates a task per agent with detailed descriptions
+8. `TaskUpdate` - sets up dependency chain (`blockedBy`)
+9. `Task` (wave 1) - spawns agents with no blockers (e.g. Explorer)
+10. **Waits** - team leader waits for wave 1 to finish
+11. `Task` (wave 2) - spawns next agents (e.g. Architect)
+12. **Repeats** - continues spawning waves as dependencies resolve
+13. `Task` (final wave) - spawns QA/Reviewer to validate everything
+14. **Delivers** - summary of all deliverables + cleanup
+
+## Execution Flow
+
+```
+You ──▶ /team-builder "my project idea"
+         │
+         ▼
+    [PLAN + CONFIRM]
+         │
+         ▼
+    TeamCreate("my-project")
+         │
+         ▼
+    TaskCreate × N (all tasks)
+         │
+         ▼
+    TaskUpdate (dependencies)
+         │
+         ▼
+    ┌─ Task: Explorer (Haiku) ──── wave 1
+    │  └─ waits...
+    │
+    ├─ Task: Architect (Sonnet) ── wave 2
+    │  └─ waits...
+    │
+    ├─ Task: Dev A (Sonnet) ──┐
+    ├─ Task: Dev B (Sonnet) ──┤── wave 3 (parallel)
+    ├─ Task: Dev C (Sonnet) ──┘
+    │  └─ waits...
+    │
+    ├─ Task: QA (Sonnet) ──────── wave 4
+    │  └─ waits...
+    │
+    └─ Summary + TeamDelete
+```
 
 ## Supported Project Types
 
@@ -55,16 +97,6 @@ Install the plugin:
 | Research | Explorer A/B/C (parallel), Synthesizer, Critic |
 | Automation | Researcher, Architect, Builder, Tester, Documenter |
 | Refactoring | Analyzer, Architect, Migrator(s), Validator |
-
-## Execution Flow (v2.0)
-
-```
-TeamCreate → TaskCreate (all tasks) → TaskUpdate (dependencies)
-  → Task (spawn agents without blockers)
-  → [agents work autonomously]
-  → TaskUpdate (mark completed) → spawn next wave
-  → SendMessage (shutdown) → TeamDelete (cleanup)
-```
 
 ## Modifiers
 
