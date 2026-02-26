@@ -1,0 +1,12 @@
+{
+  "name": "team-builder",
+  "description": "Analyzes any idea or project and intelligently builds a Claude Code agent team with optimized roles, prompts, and task dependencies",
+  "version": "1.0.0",
+  "author": {
+    "name": "Wesley Israel",
+    "url": "https://github.com/wesleyisr4"
+  },
+  "repository": "https://github.com/wesleyisr4/claude-team-builder-plugin",
+  "license": "MIT",
+  "keywords": ["team", "agents", "builder", "orchestration", "automation", "multi-agent"]
+}
