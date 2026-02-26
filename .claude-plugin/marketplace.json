@@ -13,7 +13,7 @@
       "name": "team-builder",
       "source": "./",
       "description": "Analyzes any idea or project and intelligently builds a Claude Code agent team with optimized roles, prompts, and task dependencies",
-      "version": "3.1.0",
+      "version": "3.2.0",
       "keywords": ["team", "agents", "builder", "orchestration"],
       "category": "productivity"
     }

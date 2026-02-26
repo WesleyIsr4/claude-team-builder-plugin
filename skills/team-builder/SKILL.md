@@ -37,50 +37,114 @@ Faca no maximo 2-3 perguntas de clarificacao se necessario.
 4. Paralelismo possivel e dependencias criticas
 5. Modelo ideal: Haiku para pesquisa, Sonnet para execucao, Opus para decisoes
 
-## PASSO 3: APRESENTAR O PLANO
+## PASSO 3: GERAR O AGENT TEAM PROMPT
 
-Mostre ao usuario:
-- Diagrama visual do time com dependencias
-- Tabela com: Papel, Modelo, Responsabilidade, Entregaveis
-- Numero de agentes e modelos
+Apos analisar, gere internamente o plano do time seguindo este formato estruturado.
+Este formato sera usado para apresentar ao usuario E para executar as tool calls:
+
+```markdown
+# {Titulo do Projeto} — Agent Team Prompt
+
+Create a team called `{team-name-kebab-case}` with {N} agents{, then aggregate
+their findings into `{output-file}`}.
+
+{Contexto adicional: objetivo, stack, diretorio de trabalho, restricoes}
+
+---
+
+## Agent 1 — {Role Name}
+
+**Name:** `{kebab-case-name}`
+**Model:** {Sonnet|Haiku|Opus}
+**Sub-agent type:** `general-purpose`
+
+{Instrucao direta em 1-2 frases sobre O QUE este agente faz e COMO deve trabalhar}
+
+- {Tarefa/entregavel especifico 1 com detalhes concretos}
+- {Tarefa/entregavel especifico 2 com detalhes concretos}
+- {Tarefa/entregavel especifico 3 com detalhes concretos}
+
+**Output:** `{caminho/arquivo-de-saida}`
+**Scope:** `{pastas que este agente pode editar}`
+
+## Agent 2 — {Role Name}
+
+**Name:** `{kebab-case-name}`
+**Model:** {Sonnet|Haiku|Opus}
+**Sub-agent type:** `general-purpose`
+**Blocked by:** Agent 1
+
+{mesma estrutura}
+
+---
+
+## Aggregation
+
+After ALL agents complete, {instrucao de como consolidar os resultados}.
+Output: `{arquivo-final}`
+```
+
+### Regras do formato:
+
+1. Cada agente tem: Name, Model, Sub-agent type, Blocked by (se aplicavel)
+2. Sub-agent type e SEMPRE `general-purpose` (NUNCA "Explore")
+3. Instrucoes sao diretas e imperativas, nao descritivas
+4. Tarefas sao especificas com nomes de arquivos/pastas concretos
+5. Output explicito para cada agente (o que ele produz)
+6. Scope explicito (quais pastas/arquivos pertencem a este agente)
+7. Blocked by indica dependencias entre agentes
+8. Agentes sem "Blocked by" rodam em paralelo na primeira onda
+
+## PASSO 4: APRESENTAR AO USUARIO
+
+Mostre o Agent Team Prompt ao usuario no formato acima.
+
+Adicione um resumo visual:
+
+```
+TEAM: {nome}
+{emoji} Agent 1: {Role} ({Model}) ──┐
+{emoji} Agent 2: {Role} ({Model}) ──┤──▶ {emoji} Agent 4: {Role} ({Model})
+{emoji} Agent 3: {Role} ({Model}) ──┘
+Agents: {N} | Models: {lista}
+```
 
 Pergunte: "O time esta bom assim? Quer ajustar algo antes de eu criar?"
 
 AGUARDE confirmacao. NAO prossiga sem aprovacao.
 
-## PASSO 4: EXECUTAR — CRIAR O TIME DE VERDADE
+## PASSO 5: EXECUTAR — CRIAR O TIME DE VERDADE
 
-Apos o usuario aprovar, execute EXATAMENTE nesta ordem:
+Apos o usuario aprovar, execute EXATAMENTE nesta ordem.
+NAO descreva o que vai fazer — FACA chamando as ferramentas:
 
-### 4.1 — TeamCreate
+### 5.1 — TeamCreate
 
-Chame a ferramenta TeamCreate AGORA:
+Chame TeamCreate com o team_name do prompt:
 
 ```
 TeamCreate(
-  team_name: "{nome-kebab-case}",
-  description: "{objetivo do time}"
+  team_name: "{team-name-do-prompt}",
+  description: "{objetivo}"
 )
 ```
 
-### 4.2 — TaskCreate para CADA agente
+### 5.2 — TaskCreate para CADA agente
 
-Chame TaskCreate uma vez para CADA agente do time.
-A description da tarefa deve ser DETALHADA — e o que o teammate le para saber o que fazer.
-
-Crie todas as tarefas em paralelo (multiplos TaskCreate numa unica mensagem).
+Crie UMA tarefa por agente. Todas em paralelo (multiplos TaskCreate na mesma mensagem).
+A description da tarefa DEVE conter as instrucoes completas do agente do prompt:
 
 ```
 TaskCreate(
-  subject: "{acao imperativa curta}",
-  description: "{descricao completa do trabalho — contexto, escopo, arquivos, criterios}",
+  subject: "{Role Name}: {acao imperativa curta}",
+  description: "{copie TODA a secao do agente do prompt — instrucoes + tarefas + output + scope}",
   activeForm: "{gerundio curto}"
 )
 ```
 
-### 4.3 — TaskUpdate para dependencias
+### 5.3 — TaskUpdate para dependencias
 
-Para CADA tarefa que depende de outra, chame TaskUpdate:
+Para cada agente que tem "Blocked by", configure a dependencia:
 
 ```
 TaskUpdate(
@@ -89,68 +153,58 @@ TaskUpdate(
 )
 ```
 
-### 4.4 — Task para spawnar a PRIMEIRA ONDA de teammates
+### 5.4 — Spawnar a PRIMEIRA ONDA de teammates
 
-Spawne APENAS os agentes cujas tarefas NAO tem blockedBy.
+Spawne APENAS os agentes SEM "Blocked by".
+Se houver multiplos, spawne TODOS em paralelo (multiplos Task na mesma mensagem).
 
 REGRAS OBRIGATORIAS para cada Task:
-- subagent_type DEVE ser "general-purpose" (NUNCA use "Explore")
-- team_name DEVE ser o nome do time criado no passo 4.1
-- name DEVE ser o nome kebab-case do teammate
-- model DEVE ser haiku, sonnet ou opus
-- run_in_background DEVE ser true
+- subagent_type: "general-purpose" (NUNCA "Explore")
+- team_name: o nome do time do passo 5.1
+- name: o Name do agente do prompt
+- model: o Model do agente do prompt
+- run_in_background: true
 
-Se houver multiplos agentes sem dependencias, spawne TODOS em paralelo
-(multiplos Task numa unica mensagem).
+O prompt de cada teammate DEVE ser a secao completa do agente acrescida do
+contexto do projeto e da instrucao de marcar tarefa como completed:
 
 ```
 Task(
   subagent_type: "general-purpose",
-  name: "{nome-kebab-case}",
-  team_name: "{nome-do-time}",
-  model: "{haiku|sonnet|opus}",
+  name: "{name-do-prompt}",
+  team_name: "{team-name}",
+  model: "{model-do-prompt}",
   run_in_background: true,
-  description: "{3-5 palavras}",
-  prompt: "Voce e o {PAPEL} do time {nome-do-time}.
-
-## Seu papel
-{descricao do papel}
+  description: "{role-name} — {3-5 palavras}",
+  prompt: "{COPIE a secao inteira do agente do prompt gerado no PASSO 3}
 
 ## Contexto do projeto
 - Objetivo: {objetivo}
-- Diretorio: {path absoluto}
+- Diretorio de trabalho: {path absoluto}
 - Stack: {tecnologias}
+- Team: {team-name}
 
-## Responsabilidades
-- {resp_1}
-- {resp_2}
-- {resp_3}
-
-## Escopo de arquivos (APENAS estes sao seus)
-- {pasta_1}
-- {pasta_2}
-
-## Entregaveis
-{lista exata de arquivos/docs a produzir}
-
-## Quando terminar
-Use TaskUpdate(task_id: \"{task_id}\", status: \"completed\") para marcar como concluido."
+## Regras obrigatorias
+- Trabalhe APENAS nos arquivos/pastas do seu Scope
+- NAO edite arquivos fora do seu escopo
+- Quando terminar, use TaskUpdate(task_id: \"{task_id}\", status: \"completed\")
+- Se encontrar um bloqueio, use SendMessage para avisar o team leader"
 )
 ```
 
-### 4.5 — TaskUpdate para atribuir owner
+### 5.5 — TaskUpdate para atribuir owner
 
 Apos spawnar cada teammate, atribua a tarefa:
 
 ```
 TaskUpdate(
   task_id: "{id}",
-  owner: "{nome-do-teammate}",
+  owner: "{name-do-teammate}",
   status: "in_progress"
 )
 ```
 
-### 4.6 — AGUARDAR e spawnar proximas ondas
+### 5.6 — AGUARDAR e spawnar proximas ondas
 
 Voce sera notificado automaticamente quando teammates terminarem.
 NAO faca polling. Apenas aguarde.
@@ -158,15 +212,19 @@ NAO faca polling. Apenas aguarde.
 Quando um teammate terminar:
 1. Verifique com TaskList quais tarefas foram desbloqueadas
 2. Informe o usuario: "{nome} terminou. Spawnando {proximo}..."
-3. Spawne a PROXIMA ONDA (repita 4.4 + 4.5 para os novos teammates)
+3. Spawne a PROXIMA ONDA (repita 5.4 + 5.5 para os novos teammates)
 4. Continue ate TODAS as tarefas estarem completed
 
-### 4.7 — Encerrar
+### 5.7 — Aggregation e encerramento
 
-Quando tudo terminar:
-1. SendMessage type "shutdown_request" para cada teammate
-2. Apresente resumo final ao usuario (entregaveis, status, proximos passos)
-3. TeamDelete para limpar
+Quando TODAS as tarefas estiverem completed:
+1. Execute a instrucao de Aggregation do prompt (se houver)
+2. SendMessage type "shutdown_request" para cada teammate
+3. Apresente resumo final ao usuario:
+   - Arquivos/docs produzidos
+   - Status de cada tarefa
+   - Proximos passos sugeridos
+4. TeamDelete para limpar recursos
 
 ## TEMPLATES DE TIME POR TIPO DE PROJETO
 
@@ -191,6 +249,7 @@ Quando tudo terminar:
 - "rapido"/"mvp" = 2-3 agentes. "completo"/"detalhado" = 5-6
 - Fale no idioma do usuario
 - Se existir CLAUDE.md, respeite convencoes
-- NUNCA use subagent_type "Explore" para teammates — SEMPRE "general-purpose"
+- Sub-agent type e SEMPRE "general-purpose" — NUNCA "Explore"
 - SEMPRE inclua team_name em cada Task call
 - NUNCA gere texto descrevendo as tool calls — CHAME as ferramentas de verdade
+- O Agent Team Prompt e tanto a apresentacao ao usuario quanto a base para execucao
