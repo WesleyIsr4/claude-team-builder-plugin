@@ -2,6 +2,8 @@
 
 Analyzes any idea or project and intelligently builds a Claude Code agent team with optimized roles, prompts, and task dependencies.
 
+**v2.0** - Now actually spawns structured agent teams using `TeamCreate`, `TaskCreate`, and `Task` tools with full dependency management and coordination.
+
 ## Requirements
 
 - Claude Code v2.1+ with Agent Teams enabled
@@ -25,19 +27,24 @@ Install the plugin:
 
 ```bash
 # Interactive - asks what you want to build
-/team-builder:team-builder
+/team-builder
 
 # With argument - goes straight to analysis
-/team-builder:team-builder a React Native finance app with charts and goals
+/team-builder a React Native finance app with charts and goals
 ```
 
 ## What It Does
 
 1. **Understands your idea** - asks 2-3 clarifying questions only if needed
 2. **Analyzes context** - reads your codebase, detects stack, identifies patterns
-3. **Builds the team** - creates optimized agent roles with clear prompts and deliverables
+3. **Builds the team plan** - creates optimized agent roles with clear prompts and deliverables
 4. **Shows a visual plan** - dependency diagram before executing
 5. **Asks for confirmation** - you approve or adjust before the team is created
+6. **Creates the team** - uses `TeamCreate` to set up structured team
+7. **Creates tasks** - uses `TaskCreate` with dependencies (`blockedBy`) for each agent
+8. **Spawns teammates** - uses `Task` to launch real agents with auto-contained prompts
+9. **Coordinates** - manages task assignment, unblocking, and inter-agent messaging
+10. **Cleans up** - shuts down teammates and removes team resources when done
 
 ## Supported Project Types
 
@@ -48,6 +55,16 @@ Install the plugin:
 | Research | Explorer A/B/C (parallel), Synthesizer, Critic |
 | Automation | Researcher, Architect, Builder, Tester, Documenter |
 | Refactoring | Analyzer, Architect, Migrator(s), Validator |
+
+## Execution Flow (v2.0)
+
+```
+TeamCreate → TaskCreate (all tasks) → TaskUpdate (dependencies)
+  → Task (spawn agents without blockers)
+  → [agents work autonomously]
+  → TaskUpdate (mark completed) → spawn next wave
+  → SendMessage (shutdown) → TeamDelete (cleanup)
+```
 
 ## Modifiers
 

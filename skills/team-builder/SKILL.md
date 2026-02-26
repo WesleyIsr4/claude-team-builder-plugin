@@ -100,49 +100,7 @@ Para REFATORACAO/MIGRACAO:
 - Migrator(s) → executa a migracao por modulo (paralelo por area)
 - Validator → roda testes, compara comportamento antes/depois
 
-### Formato do prompt do time:
-
-Monte o prompt seguindo EXATAMENTE este formato:
-
-```
-Crie um time de agentes para {descricao_concisa_do_objetivo}.
-
-**CONTEXTO:**
-{contexto relevante - stack existente, restricoes, preferencias do usuario}
-
-Spawne {N} teammates:
-
-**1. {NOME_DO_PAPEL} ({Modelo}, {Tipo}):**
-Voce e {descricao_do_papel_em_uma_frase}.
-
-Suas responsabilidades:
-- {responsabilidade_1}
-- {responsabilidade_2}
-- {responsabilidade_3}
-
-Regras:
-- {restricao_ou_diretriz_1}
-- {restricao_ou_diretriz_2}
-
-Entregavel: {o_que_exatamente_esse_agente_deve_produzir}
-{inclua nomes de arquivos/pastas especificos quando possivel}
-
-**2. {PROXIMO_PAPEL}...**
-{mesmo formato}
-
-**DEPENDENCIAS:**
-1. {Papel_1} → trabalha imediatamente
-2. {Papel_2} → depende de {Papel_1}
-3. {Papel_3} e {Papel_4} → trabalham em paralelo, dependem de {Papel_2}
-4. {Papel_5} → depende de {Papel_3} e {Papel_4}
-
-**REGRAS GERAIS:**
-- {regra_especifica_do_projeto}
-- Aguarde TODOS os teammates terminarem antes de sintetizar
-- Crie um documento final {nome_do_doc} consolidando tudo
-```
-
-### Principios de um bom prompt de time:
+### Principios de um bom time:
 
 1. **Cada papel tem escopo claro** - nao ha sobreposicao de responsabilidades
 2. **Entregas sao concretas** - arquivos especificos, nao "algo sobre X"
@@ -152,11 +110,21 @@ Entregavel: {o_que_exatamente_esse_agente_deve_produzir}
 6. **Modelos sao otimizados** - Haiku para pesquisa, Sonnet para execucao
 7. **Ha um agente de qualidade** - sempre valida antes de entregar
 
+### Estrutura interna do plano:
+
+Para cada agente do time, defina internamente:
+- **nome**: slug kebab-case (ex: "explorer", "engine-dev", "qa-reviewer")
+- **modelo**: haiku, sonnet, ou opus
+- **subagent_type**: "Explore" para pesquisa read-only, "general-purpose" para implementacao
+- **prompt**: prompt completo e auto-contido com papel, responsabilidades, regras e entregavel
+- **dependencias**: lista de quais tarefas bloqueiam esta (IDs)
+- **tarefa**: subject + description + activeForm para o TaskCreate
+
 ## FASE 4: CONFIRMAR E EXECUTAR
 
-Antes de criar o time:
+### Passo 1 — Apresentar o plano ao usuario
 
-1. Apresente um RESUMO VISUAL do time ao usuario:
+Mostre um RESUMO VISUAL do time:
 
 ```
 TEAM PLAN: {nome do projeto}
@@ -170,10 +138,138 @@ TEAM PLAN: {nome do projeto}
 Agents: {N} | Estimated tasks: {N} | Models: {lista}
 ```
 
-2. Pergunte: "O time esta bom assim? Quer ajustar algo antes de eu criar?"
+Pergunte: "O time esta bom assim? Quer ajustar algo antes de eu criar?"
 
-3. Se o usuario aprovar, execute o prompt criando o time
-4. Informe que ele pode acompanhar com `Shift+Down` ou nos panes do tmux
+### Passo 2 — Criar o time (TeamCreate)
+
+Apos aprovacao do usuario, use a ferramenta `TeamCreate` para criar o time:
+
+```
+TeamCreate(
+  team_name: "{nome-do-projeto-kebab-case}",
+  description: "{descricao do objetivo do time}"
+)
+```
+
+Isso cria a estrutura em `~/.claude/teams/{nome}/` e `~/.claude/tasks/{nome}/`.
+
+### Passo 3 — Criar todas as tarefas (TaskCreate)
+
+Use `TaskCreate` para criar UMA tarefa para cada agente do time.
+Crie TODAS as tarefas de uma vez (em paralelo quando possivel):
+
+```
+TaskCreate(
+  subject: "{acao no imperativo - ex: Pesquisar referencias e mapear arquitetura}",
+  description: "{descricao detalhada do que fazer, contexto, criterios de aceite}",
+  activeForm: "{forma no gerundio - ex: Pesquisando referencias}"
+)
+```
+
+IMPORTANTE: Anote os IDs retornados por cada TaskCreate para configurar dependencias.
+
+### Passo 4 — Configurar dependencias (TaskUpdate)
+
+Use `TaskUpdate` para definir bloqueios entre tarefas:
+
+```
+TaskUpdate(
+  task_id: "{id_da_tarefa_dependente}",
+  blockedBy: ["{id_da_tarefa_que_bloqueia}"]
+)
+```
+
+Exemplo para um time tipico:
+- Tarefa "Architect" blockedBy: [tarefa "Explorer"]
+- Tarefas "Dev A", "Dev B" blockedBy: [tarefa "Architect"]
+- Tarefa "QA" blockedBy: [tarefa "Dev A", tarefa "Dev B"]
+
+### Passo 5 — Spawnar os teammates (Task)
+
+Use a ferramenta `Task` para spawnar cada agente como um teammate real.
+
+Para agentes que NAO tem dependencia (podem comecar imediatamente):
+- Spawne-os em paralelo usando multiplos `Task` calls numa unica mensagem
+
+Para agentes que TEM dependencias:
+- Spawne-os somente DEPOIS que suas dependencias forem concluidas
+- Voce sera notificado automaticamente quando teammates terminarem
+
+Formato para cada teammate:
+
+```
+Task(
+  subagent_type: "general-purpose",  // ou "Explore" para agentes read-only
+  description: "{descricao curta 3-5 palavras}",
+  name: "{nome-kebab-case}",
+  team_name: "{nome-do-time}",
+  model: "{haiku|sonnet|opus}",
+  prompt: "{prompt completo e auto-contido - veja formato abaixo}"
+)
+```
+
+**Formato do prompt de cada teammate:**
+
+```
+Voce e o {NOME_DO_PAPEL} do time "{nome-do-time}".
+
+## Seu papel
+{descricao do papel em uma frase}
+
+## Contexto do projeto
+{contexto relevante - objetivo, stack, restricoes, preferencias}
+
+## Suas responsabilidades
+- {responsabilidade_1}
+- {responsabilidade_2}
+- {responsabilidade_3}
+
+## Regras
+- {restricao_ou_diretriz_1}
+- {restricao_ou_diretriz_2}
+- Quando terminar, use TaskUpdate para marcar sua tarefa (ID: {id}) como completed
+- NAO edite arquivos que pertencem a outro teammate
+
+## Entregavel
+{o que exatamente esse agente deve produzir}
+{inclua nomes de arquivos/pastas especificos quando possivel}
+```
+
+IMPORTANTE sobre o prompt:
+- O prompt DEVE ser auto-contido (o agente nao tem acesso ao historico desta conversa)
+- Inclua TODO o contexto necessario: objetivo do projeto, stack, diretorio de trabalho
+- Inclua o ID da tarefa para o agente marcar como completed quando terminar
+- Inclua regras claras sobre quais arquivos/pastas pertencem a este agente
+
+### Passo 6 — Atribuir tarefas aos teammates (TaskUpdate)
+
+Apos spawnar cada teammate, atribua a tarefa correspondente:
+
+```
+TaskUpdate(
+  task_id: "{id_da_tarefa}",
+  owner: "{nome-do-teammate}",
+  status: "in_progress"
+)
+```
+
+### Passo 7 — Coordenar o time
+
+- Teammates enviam mensagens automaticamente quando terminam ou precisam de ajuda
+- Voce NAO precisa fazer polling — sera notificado automaticamente
+- Quando um teammate termina, verifique se ha tarefas desbloqueadas:
+  - Use `TaskList` para ver status atualizado
+  - Spawne novos teammates para tarefas recem-desbloqueadas (volte ao Passo 5)
+  - Use `SendMessage` se precisar coordenar entre teammates
+- Quando TODOS os teammates terminarem, informe o usuario do resultado
+
+### Passo 8 — Encerrar o time
+
+Quando todo o trabalho estiver concluido:
+1. Envie `SendMessage` com type "shutdown_request" para cada teammate ativo
+2. Aguarde todos encerrarem
+3. Use `TeamDelete` para limpar os recursos do time
+4. Apresente um resumo final ao usuario com os entregaveis produzidos
 
 ## NOTAS IMPORTANTES
 
